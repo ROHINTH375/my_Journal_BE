@@ -85,8 +85,8 @@ router.post('/submissions/:id/publish', async (req, res) => {
   try {
     const submission = await Submission.findById(req.params.id);
     if (!submission) return res.status(404).json({ msg: 'Submission not found' });
-    if (submission.status === 'published') {
-      return res.status(400).json({ msg: 'Submission is already published' });
+    if (submission.status !== 'accepted') {
+      return res.status(400).json({ msg: 'Only an accepted submission can be published' });
     }
 
     const { issueId, articleNumber, pages, doi, publishedDate, abstractExcerpt } = req.body;

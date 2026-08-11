@@ -10,7 +10,8 @@ const SubmissionSchema = new mongoose.Schema({
   authors: { type: [AuthorSchema], required: true },
   correspondingAuthor: {
     name: { type: String, required: true },
-    email: { type: String, required: true }
+    email: { type: String, required: true },
+    phone: { type: String, default: '' }
   },
   coverLetter: { type: String, default: '' },
   manuscriptFileId: { type: mongoose.Schema.Types.ObjectId, required: true },
