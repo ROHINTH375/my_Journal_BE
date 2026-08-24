@@ -15,6 +15,10 @@ const SubmissionSchema = new mongoose.Schema({
   },
   coverLetter: { type: String, default: '' },
   manuscriptFileId: { type: mongoose.Schema.Types.ObjectId, required: true },
+  // Structural enforcement of "research articles only" — a single-value enum
+  // the client can't override, not just a UI label.
+  articleType: { type: String, enum: ['research-article'], default: 'research-article' },
+  author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   status: { type: String, enum: STATUSES, default: 'submitted' },
   referenceId: { type: String, required: true, unique: true },
   notes: [{

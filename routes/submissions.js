@@ -3,6 +3,8 @@ const router = express.Router();
 const Submission = require('../models/Submission');
 const upload = require('../utils/upload');
 const { uploadBuffer } = require('../utils/gridfs');
+const userAuth = require('../middleware/userAuth');
+const { requireRole } = userAuth;
 
 function generateReferenceId() {
   const year = new Date().getFullYear();
@@ -12,8 +14,8 @@ function generateReferenceId() {
 
 // @route   POST api/submissions
 // @desc    Submit a manuscript (multipart: manuscript file + JSON fields)
-// @access  Public
-router.post('/', upload.single('manuscript'), async (req, res) => {
+// @access  Author only — submissions are tied to the account that made them
+router.post('/', userAuth, requireRole('author'), upload.single('manuscript'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ msg: 'Manuscript PDF is required' });
@@ -53,6 +55,7 @@ router.post('/', upload.single('manuscript'), async (req, res) => {
       correspondingAuthor: parsedCorresponding,
       coverLetter: coverLetter || '',
       manuscriptFileId,
+      author: req.user.id,
       referenceId
     });
 

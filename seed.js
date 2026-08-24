@@ -1,12 +1,22 @@
 // Seeds the demo content that used to live in my_Journal_FE/src/data/*.ts —
 // keeps the live site non-empty after the frontend switches to fetching from
 // this API. Idempotent (upserts by slug), safe to re-run.
+const dns = require('dns');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
+const bcrypt = require('bcryptjs');
 const Issue = require('./models/Issue');
 const Article = require('./models/Article');
+const User = require('./models/User');
+const Submission = require('./models/Submission');
+const ReviewAssignment = require('./models/ReviewAssignment');
+const { uploadBuffer } = require('./utils/gridfs');
 
 dotenv.config();
+
+// See server.js for why this is needed — the local/VPN DNS resolver can't
+// answer the SRV+TXT queries mongodb+srv:// needs.
+dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 const issues = [
   { slug: 'v3-i2-2026', volume: 3, number: 2, year: 2026, season: 'Summer', label: 'Vol. 3, No. 2 (2026)', isCurrent: true },
@@ -132,6 +142,70 @@ async function run() {
     );
     console.log(`Article: ${article.title}`);
   }
+
+  // Demo Author + Reviewer accounts, plus a submission-in-progress and a
+  // review assignment linking them, so the new dashboards aren't empty on
+  // a fresh checkout. Password for both: "password123".
+  const demoPasswordHash = await bcrypt.hash('password123', await bcrypt.genSalt(10));
+
+  const demoAuthor = await User.findOneAndUpdate(
+    { email: 'demo.author@lattice.test' },
+    {
+      name: 'Demo Author',
+      email: 'demo.author@lattice.test',
+      password: demoPasswordHash,
+      role: 'author',
+      affiliation: 'Cedar Bluff University',
+      country: 'Kenya',
+      keywords: ['Climate Science', 'Public Policy']
+    },
+    { upsert: true, new: true }
+  );
+  console.log(`User: ${demoAuthor.email} (author)`);
+
+  const demoReviewer = await User.findOneAndUpdate(
+    { email: 'demo.reviewer@lattice.test' },
+    {
+      name: 'Demo Reviewer',
+      email: 'demo.reviewer@lattice.test',
+      password: demoPasswordHash,
+      role: 'reviewer',
+      affiliation: 'Northmoor Institute',
+      country: 'Ireland',
+      keywords: ['Climate Science', 'Environmental Science']
+    },
+    { upsert: true, new: true }
+  );
+  console.log(`User: ${demoReviewer.email} (reviewer)`);
+
+  let demoSubmission = await Submission.findOne({ referenceId: 'LAT-DEMO-0001' });
+  if (!demoSubmission) {
+    const manuscriptFileId = await uploadBuffer(
+      Buffer.from('Placeholder manuscript text for the seeded demo submission.'),
+      'demo-manuscript.txt',
+      'text/plain'
+    );
+    demoSubmission = await Submission.create({
+      title: 'Urban Heat Island Effects on Pollinator Behavior: A Pilot Study',
+      abstract:
+        'A pilot study tracking bee foraging patterns across urban heat islands, laying groundwork for a larger cross-city comparison.',
+      keywords: ['Climate Science', 'Ecology'],
+      authors: [{ name: 'Demo Author', affiliation: 'Cedar Bluff University', country: 'Kenya' }],
+      correspondingAuthor: { name: 'Demo Author', email: demoAuthor.email, phone: '+254700000000' },
+      manuscriptFileId,
+      author: demoAuthor._id,
+      status: 'under_review',
+      referenceId: 'LAT-DEMO-0001'
+    });
+    console.log(`Submission: ${demoSubmission.title}`);
+  }
+
+  await ReviewAssignment.findOneAndUpdate(
+    { submission: demoSubmission._id, reviewer: demoReviewer._id },
+    { submission: demoSubmission._id, reviewer: demoReviewer._id, status: 'invited' },
+    { upsert: true, new: true }
+  );
+  console.log('ReviewAssignment: demo.reviewer@lattice.test -> LAT-DEMO-0001');
 
   console.log('Seed complete.');
   process.exit(0);

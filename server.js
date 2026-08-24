@@ -1,3 +1,5 @@
+const dns = require('dns');
+const http = require('http');
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -5,8 +7,17 @@ const dotenv = require('dotenv');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
+const cookie = require('cookie');
+const jwt = require('jsonwebtoken');
+const { Server: SocketIOServer } = require('socket.io');
 
 dotenv.config();
+
+// The local/VPN DNS resolver can fail to answer the SRV+TXT queries that
+// mongodb+srv:// needs (seen as ETIMEOUT on queryTxt), even though the
+// hostname otherwise resolves fine. Point Node at public resolvers so the
+// Atlas SRV lookup succeeds regardless of the host's default DNS setup.
+dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 const app = express();
 
@@ -27,14 +38,20 @@ const allowedOrigins = [
   'http://localhost:3000'
 ].filter(Boolean);
 
+// Shared by the REST CORS middleware and the Socket.IO CORS check below, so
+// the two surfaces can't drift out of sync.
+function isOriginAllowed(origin) {
+  return (
+    !origin ||
+    allowedOrigins.includes(origin) ||
+    origin.startsWith('http://localhost') ||
+    origin.startsWith('http://127.0.0.1')
+  );
+}
+
 app.use(cors({
   origin: function (origin, callback) {
-    if (
-      !origin ||
-      allowedOrigins.includes(origin) ||
-      origin.startsWith('http://localhost') ||
-      origin.startsWith('http://127.0.0.1')
-    ) {
+    if (isOriginAllowed(origin)) {
       callback(null, true);
     } else {
       console.error('CORS blocked request from origin:', origin);
@@ -68,11 +85,13 @@ mongoose.connect(process.env.MONGO_URI)
   .catch((err) => console.log('MongoDB Connection Error:', err));
 
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/users', require('./routes/userAuth'));
 app.use('/api/articles', require('./routes/articles'));
 app.use('/api/issues', require('./routes/issues'));
 app.use('/api/files', require('./routes/files'));
 app.use('/api/submissions', require('./routes/submissions'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // Catches multer errors (bad file type, too large) and the CORS rejection
 // thrown in the origin callback above, so they come back as JSON instead of
@@ -83,5 +102,42 @@ app.use((err, req, res, next) => {
   res.status(400).json({ msg: err.message || 'Request error' });
 });
 
+const server = http.createServer(app);
+
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: (origin, callback) => callback(null, isOriginAllowed(origin)),
+    credentials: true
+  }
+});
+
+// Authenticate the socket using the same JWT cookies the REST API reads —
+// either an Editor ('token') or a User ('user_token') session — then join a
+// room keyed exactly the way utils/notify.js addresses notifications:
+// `${recipientType.toLowerCase()}:${id}`.
+io.use((socket, next) => {
+  try {
+    const cookies = cookie.parse(socket.handshake.headers.cookie || '');
+    if (cookies.user_token) {
+      const decoded = jwt.verify(cookies.user_token, process.env.JWT_SECRET);
+      socket.data.room = `user:${decoded.user.id}`;
+    } else if (cookies.token) {
+      const decoded = jwt.verify(cookies.token, process.env.JWT_SECRET);
+      socket.data.room = `editor:${decoded.editor.id}`;
+    } else {
+      return next(new Error('Unauthorized'));
+    }
+    next();
+  } catch (err) {
+    next(new Error('Unauthorized'));
+  }
+});
+
+io.on('connection', (socket) => {
+  socket.join(socket.data.room);
+});
+
+app.set('io', io);
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
