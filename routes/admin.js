@@ -209,7 +209,7 @@ router.post('/submissions/:id/reviewers', async (req, res) => {
     });
 
     try {
-      await sendReviewerAssignedEmail(reviewer.email, submission.title, `${process.env.CLIENT_URL}/dashboard`);
+      await sendReviewerAssignedEmail(reviewer.email, submission.title, `${process.env.FRONTEND_URL}/dashboard`);
     } catch (emailErr) {
       // Assignment itself succeeded (DB + in-app notification) — a failed
       // email shouldn't roll that back, just surface it in the response.
