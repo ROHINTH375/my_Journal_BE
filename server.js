@@ -35,6 +35,7 @@ app.use(cookieParser());
 const allowedOrigins = [
   process.env.CLIENT_URL,
   'https://rohinth375.github.io',
+  'https://journalwebsite1904-one.vercel.app',
   'http://localhost:3000'
 ].filter(Boolean);
 
@@ -45,7 +46,10 @@ function isOriginAllowed(origin) {
     !origin ||
     allowedOrigins.includes(origin) ||
     origin.startsWith('http://localhost') ||
-    origin.startsWith('http://127.0.0.1')
+    origin.startsWith('http://127.0.0.1') ||
+    // Preview deployments get random *.vercel.app subdomains per build —
+    // allow the whole subdomain rather than chasing each one.
+    /^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin)
   );
 }
 
