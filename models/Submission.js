@@ -28,7 +28,11 @@ const SubmissionSchema = new mongoose.Schema({
   }],
   assignedEditor: { type: mongoose.Schema.Types.ObjectId, ref: 'Editor', default: null },
   articleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Article', default: null },
-  submittedDate: { type: Date, default: Date.now }
+  submittedDate: { type: Date, default: Date.now },
+  // Set once, the first time status transitions to 'accepted' — carried
+  // over to the published Article's receivedDate/acceptedDate so real
+  // articles can show a genuine review timeline (DOAJ recommends this).
+  acceptedDate: { type: Date, default: null }
 }, { timestamps: true });
 
 SubmissionSchema.statics.STATUSES = STATUSES;

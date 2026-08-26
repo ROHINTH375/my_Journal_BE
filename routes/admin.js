@@ -67,6 +67,9 @@ router.patch('/submissions/:id', async (req, res) => {
         return res.status(400).json({ msg: 'Use POST /api/admin/submissions/:id/publish to publish' });
       }
       submission.status = status;
+      if (status === 'accepted' && !submission.acceptedDate) {
+        submission.acceptedDate = new Date();
+      }
     }
 
     if (note) {
@@ -134,6 +137,8 @@ router.post('/submissions/:id/publish', async (req, res) => {
       issue: issue._id,
       articleNumber,
       pages,
+      receivedDate: submission.submittedDate,
+      acceptedDate: submission.acceptedDate,
       publishedDate: publishedDate ? new Date(publishedDate) : new Date(),
       fileId: submission.manuscriptFileId
     });

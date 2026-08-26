@@ -12,6 +12,11 @@ const ArticleSchema = new mongoose.Schema({
   issue: { type: mongoose.Schema.Types.ObjectId, ref: 'Issue', required: true },
   articleNumber: { type: Number, required: true },
   pages: { type: String, required: true },
+  // Optional — only present on articles published through the real
+  // submission workflow (not the earlier seed data), so the article page
+  // can show a genuine Received/Accepted/Published timeline where it exists.
+  receivedDate: { type: Date, default: null },
+  acceptedDate: { type: Date, default: null },
   publishedDate: { type: Date, required: true },
   fileId: { type: mongoose.Schema.Types.ObjectId, default: null }
 }, { timestamps: true });
